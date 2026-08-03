@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Game Tembak HP</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        body {
+            margin: 0;
+            padding: 0;
+            background: #111;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            touch-action: none;
+        }
+        canvas {
+            display: block;
+            background: linear-gradient(to bottom, #000428, #004e92);
+        }
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            display: flex;
+            justify-content: space-between;
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            pointer-events: none;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
+        }
+        #controls {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            display: flex;
+            justify-content: space-around;
+            padding: 0 20px;
+        }
+        .btn {
+            width: 70px;
+            height: 70px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid white;
+            border-radius: 50%;
+            color: white;
+            font-size: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            outline: none;
+            backdrop-filter: blur(5px);
+        }
+        .btn:active {
+            background: rgba(255, 255, 255, 0.5);
+        }
+        #fireBtn {
+            background: rgba(255, 0, 0, 0.3);
+            border-color: #ff4444;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <div id="scoreText">Skor: 0</div>
+        <div id="livesText">Nyawa: ❤️❤️❤️</div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="controls">
+        <div class="btn" id="leftBtn">◀</div>
+        <div class="btn" id="fireBtn">🎯</div>
+        <div class="btn" id="rightBtn">▶</div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        // Sesuaikan ukuran canvas dengan layar HP
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        let score = 0;
+        let lives = 3;
+        let isGameOver = false;
+
+        // Player (Pesawat)
+        let player = {
+            x: canvas.width / 2 - 25,
+            y: canvas.height - 180,
+            width: 50,
+            height: 50,
+            speed: 8,
+            dx: 0
+        };
+
+        let bullets = [];
+        let enemies = [];
+        let explosions = [];
+
+        // Kontrol Tombol HP
+        let movingLeft = false;
+        let movingRight = false;
+
+        document.getElementById("leftBtn").addEventListener("touchstart", () => { movingLeft = true; });
+        document.getElementById("leftBtn").addEventListener("touchend", () => { movingLeft = false; });
+        document.getElementById("rightBtn").addEventListener("touchstart", () => { movingRight = true; });
+        document.getElementById("rightBtn").addEventListener("touchend", () => { movingRight = false; });
+        
+        document.getElementById("fireBtn").addEventListener("touchstart", () => {
+            shootBullet();
+        });
+
+        // Bisa juga digeser langsung dengan sentuhan di layar
+        canvas.addEventListener("touchmove", (e) => {
+            let touchX = e.touches[0].clientX;
+            player.x = touchX - player.width / 2;
+        });
+
+        function shootBullet() {
+            if (isGameOver) return;
+            bullets.push({
+                x: player.x + player.width / 2 - 4,
+                y: player.y,
+                width: 8,
+                height: 15,
+                speed: 12
+            });
+        }
+
+        // Spawn Musuh secara berkala
+        setInterval(() => {
+            if (isGameOver) return;
+            let size = 40;
+            let x = Math.random() * (canvas.width - size);
+            enemies.push({
+                x: x,
+                y: -size,
+                width: size,
+                height: size,
+                speed: 3 + Math.random() * 2
+            });
+        }, 1200);
+
+        function update() {
+            if (isGameOver) return;
+
+            // Pergerakan Player
+            if (movingLeft && player.x > 0) {
+                player.x -= player.speed;
+            }
+            if (movingRight && player.x < canvas.width - player.width) {
+                player.x += player.speed;
+            }
+
+            // Batas layar player
+            if (player.x < 0) player.x = 0;
+            if (player.x > canvas.width - player.width) player.x = canvas.width - player.width;
+
+            // Update Peluru
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                bullets[i].y -= bullets[i].speed;
+                if (bullets[i].y < 0) {
+                    bullets.splice(i, 1);
+                }
+            }
+
+            // Update Musuh
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                enemies[i].y += enemies[i].speed;
+
+                // Cek Tabrakan Musuh dengan Player
+                if (
+                    player.x < enemies[i].x + enemies[i].width &&
+                    player.x + player.width > enemies[i].x &&
+                    player.y < enemies[i].y + enemies[i].height &&
+                    player.y + player.height > enemies[i].y
+                ) {
+                    enemies.splice(i, 1);
+                    lives--;
+                    if (lives <= 0) {
+                        isGameOver = true;
+                    }
+                    continue;
+                }
+
+                // Jika musuh lewat bawah layar (lolos)
+                if (enemies[i].y > canvas.height) {
+                    enemies.splice(i, 1);
+                    lives--;
+                    if (lives <= 0) {
+                        isGameOver = true;
+                    }
+                    continue;
+                }
+
+                // Cek Tabrakan Peluru dengan Musuh
+                for (let j = bullets.length - 1; j >= 0; j--) {
+                    if (
+                        bullets[j].x < enemies[i].x + enemies[i].width &&
+                        bullets[j].x + bullets[j].width > enemies[i].x &&
+                        bullets[j].y < enemies[i].y + enemies[i].height &&
+                        bullets[j].y + bullets[j].height > enemies[i].y
+                    ) {
+                        score += 10;
+                        enemies.splice(i, 1);
+                        bullets.splice(j, 1);
+                        break;
+                    }
+                }
+            }
+
+            // Update Tampilan UI
+            document.getElementById("scoreText").innerText = "Skor: " + score;
+            document.getElementById("livesText").innerText = "Nyawa: " + "❤️".repeat(Math.max(0, lives));
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Gambar Player (Pesawat sederhana)
+            ctx.fillStyle = "#00ffcc";
+            ctx.beginPath();
+            ctx.moveTo(player.x + player.width / 2, player.y);
+            ctx.lineTo(player.x, player.y + player.height);
+            ctx.lineTo(player.x + player.width, player.y + player.height);
+            ctx.closePath();
+            ctx.fill();
+
+            // Gambar Peluru
+            ctx.fillStyle = "#ffeb3b";
+            bullets.forEach(b => {
+                ctx.fillRect(b.x, b.y, b.width, b.height);
+            });
+
+            // Gambar Musuh
+            ctx.fillStyle = "#ff3366";
+            enemies.forEach(e => {
+                ctx.fillRect(e.x, e.y, e.width, e.height);
+            });
+
+            // Tampilan Game Over
+            if (isGameOver) {
+                ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                ctx.fillStyle = "white";
+                ctx.font = "bold 30px Arial";
+                ctx.textAlign = "center";
+                ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2 - 30);
+                
+                ctx.font = "18px Arial";
+                ctx.fillText("Skor Akhir: " + score, canvas.width / 2, canvas.height / 2 + 10);
+                ctx.fillText("Sentuh layar untuk main lagi", canvas.width / 2, canvas.height / 2 + 60);
+            }
+        }
+
+        function loop() {
+            update();
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        // Restart game saat disentuh setelah Game Over
+        window.addEventListener("touchstart", () => {
+            if (isGameOver) {
+                score = 0;
+                lives = 3;
+                enemies = [];
+                bullets = [];
+                isGameOver = false;
+                player.x = canvas.width / 2 - 25;
+            }
+        });
+
+        loop();
+    </script>
+</body>
+</html>v
